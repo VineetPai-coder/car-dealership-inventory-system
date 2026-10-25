@@ -6,8 +6,8 @@ const config = {
   // Node environment for backend tests
   testEnvironment: 'node',
 
-  // Only look for tests inside server/tests/
-  testMatch: ['**/server/tests/**/*.test.ts'],
+  // Backend and browser-facing client tests
+  testMatch: ['**/server/tests/**/*.test.ts', '**/client/tests/**/*.test.tsx'],
 
   // Module name mapper — resolves bare .ts imports used inside source files
   moduleNameMapper: {
@@ -24,6 +24,7 @@ const config = {
           module: 'ESNext',
           moduleResolution: 'Bundler',
           target: 'ES2022',
+          jsx: 'react-jsx',
         },
       },
     ],
