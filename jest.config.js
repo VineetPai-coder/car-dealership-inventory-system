@@ -9,6 +9,18 @@ const config = {
   // Backend and browser-facing client tests
   testMatch: ['**/server/tests/**/*.test.ts', '**/client/tests/**/*.test.tsx'],
 
+  reporters: [
+    'default',
+    [
+      'jest-html-reporter',
+      {
+        pageTitle: 'Car Dealership Inventory System — Test Report',
+        outputPath: 'TEST_REPORT.html',
+        includeFailureMsg: true,
+      },
+    ],
+  ],
+
   // Module name mapper — resolves bare .ts imports used inside source files
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',

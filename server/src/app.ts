@@ -43,7 +43,7 @@ app.use('/api/vehicles', vehiclesRouter);
 
 // ─── Serve frontend in production ─────────────────────────────────────────────
 
-const clientDist = path.resolve(__dirname, '../../../client/dist');
+const clientDist = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDist));
 
 // Fallback — serve React SPA for non-API routes (client-side routing)

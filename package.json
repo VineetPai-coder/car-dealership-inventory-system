@@ -5,9 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:server": "node --watch --experimental-strip-types server/src/server.ts",
-    "dev:client": "vite client",
+    "dev:server": "tsx watch server/src/server.ts",
+    "dev:client": "vite --config vite.config.ts",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "npm run build:server && npm run build:client",
     "build:client": "vite build client",
     "build:server": "tsc -p server/tsconfig.json",
     "start": "node dist/server/server.js",
@@ -43,10 +44,12 @@
     "concurrently": "^8.2.2",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "jest-html-reporter": "^4.4.2",
     "postcss": "^8.4.38",
     "supertest": "^7.0.0",
     "tailwindcss": "^3.4.4",
     "ts-jest": "^29.1.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "vite": "^5.2.13"
   }

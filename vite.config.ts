@@ -8,7 +8,8 @@ export default defineConfig({
   plugins: [react()],
 
   css: {
-    postcss: path.resolve('../postcss.config.js'),
+    // Vite expects the directory containing postcss.config.js, not the file path.
+    postcss: path.resolve('.'),
   },
 
   build: {
