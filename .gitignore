@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+dist/
+coverage/
+
+# environment
+.env
+
+# database files
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+
+# test output
+test_report.json
