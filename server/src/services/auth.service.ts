@@ -2,8 +2,7 @@
  * services/auth.service.ts
  *
  * Business logic for user authentication.
- * Services are pure functions that receive a DB instance — fully
- * unit-testable without spinning up Express.
+ * Pure service functions receiving DatabaseSync instances for clean test isolation.
  */
 
 import { DatabaseSync } from 'node:sqlite';
@@ -13,14 +12,21 @@ import { ConflictError, UnauthorizedError, ValidationError } from '../types/inde
 import { registerSchema, loginSchema } from '../validators/vehicle.schema.js';
 import { signToken } from '../middleware/auth.js';
 
-// ─── Password helpers ─────────────────────────────────────────────────────────
+const BCRYPT_SALT_ROUNDS = 10;
 
-/** Hashes a plain-text password using bcrypt (cost factor 10). */
-export function hashPassword(plain: string): string {
-  return bcrypt.hashSync(plain, 10);
+/** Normalizes email by trimming whitespace and converting to lowercase. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
-/** Returns true if the plain-text password matches the stored hash. */
+// ─── Password helpers ─────────────────────────────────────────────────────────
+
+/** Hashes a plain-text password using bcrypt. */
+export function hashPassword(plain: string): string {
+  return bcrypt.hashSync(plain, BCRYPT_SALT_ROUNDS);
+}
+
+/** Returns true if the plain-text password matches the stored bcrypt hash. */
 export function verifyPassword(plain: string, hash: string): boolean {
   return bcrypt.compareSync(plain, hash);
 }
@@ -35,9 +41,11 @@ export function generateToken(user: User): string {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 /**
- * Registers a new user.
- * Throws ConflictError if the email is already taken.
- * Throws ValidationError if the input is invalid.
+ * Registers a new user with role 'user'.
+ * Validates input, enforces email uniqueness, and stores a hashed password.
+ *
+ * @throws {ValidationError} When payload fails schema validation
+ * @throws {ConflictError} When email is already registered
  */
 export function register(db: DatabaseSync, input: unknown): AuthResult {
   const parsed = registerSchema.safeParse(input);
@@ -46,24 +54,24 @@ export function register(db: DatabaseSync, input: unknown): AuthResult {
   }
 
   const { name, email, password } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = normalizeEmail(email);
 
-  const existing = db
-    .prepare('SELECT id FROM users WHERE email = ?')
-    .get(normalizedEmail) as { id: number } | undefined;
+  const checkStmt = db.prepare('SELECT id FROM users WHERE email = ?');
+  const existing = checkStmt.get(normalizedEmail) as { id: number } | undefined;
 
   if (existing) {
     throw new ConflictError('An account with this email already exists.');
   }
 
   const passwordHash = hashPassword(password);
-  const result = db
-    .prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
-    .run(name, normalizedEmail, passwordHash, 'user');
+  const insertStmt = db.prepare(
+    'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+  );
+  const result = insertStmt.run(name.trim(), normalizedEmail, passwordHash, 'user');
 
   const user: User = {
     id: Number(result.lastInsertRowid),
-    name,
+    name: name.trim(),
     email: normalizedEmail,
     role: 'user',
   };
@@ -77,8 +85,10 @@ export function register(db: DatabaseSync, input: unknown): AuthResult {
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 /**
- * Authenticates a user by email + password.
- * Throws UnauthorizedError if credentials are invalid.
+ * Authenticates a user by email and password.
+ *
+ * @throws {ValidationError} When payload fails schema validation
+ * @throws {UnauthorizedError} When credentials do not match
  */
 export function login(db: DatabaseSync, input: unknown): AuthResult {
   const parsed = loginSchema.safeParse(input);
@@ -87,11 +97,12 @@ export function login(db: DatabaseSync, input: unknown): AuthResult {
   }
 
   const { email, password } = parsed.data;
-  const normalizedEmail = email.toLowerCase();
+  const normalizedEmail = normalizeEmail(email);
 
-  const row = db
-    .prepare('SELECT id, name, email, password_hash, role FROM users WHERE email = ?')
-    .get(normalizedEmail) as UserRow | undefined;
+  const queryStmt = db.prepare(
+    'SELECT id, name, email, password_hash, role FROM users WHERE email = ?',
+  );
+  const row = queryStmt.get(normalizedEmail) as UserRow | undefined;
 
   if (!row || !verifyPassword(password, row.password_hash)) {
     throw new UnauthorizedError('Email or password is incorrect.');
