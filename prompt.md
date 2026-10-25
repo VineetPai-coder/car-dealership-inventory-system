@@ -49,3 +49,17 @@ Implement the GREEN step for Phase 3: build a minimal Tailwind frontend with log
 Replaced the client placeholder with accessible sign-in and registration forms, a responsive vehicle inventory dashboard, search filters, inventory cards, and admin-only create/edit/delete actions. Added an API service that sends stored JWTs as bearer tokens, persists tokens returned from login and registration, validates session state through `/api/auth/me`, and calls the existing vehicle endpoints. Added minimal responsive Tailwind styling.
 
 Verification: all 5 test suites pass (111/111). The Vite client production build and strict client TypeScript check pass. The client tests also pass with Jest open-handle detection enabled.
+
+---
+
+# Phase 3 REFACTOR — Prompt and AI Output
+
+## Prompt
+
+Refactor the frontend to remove duplicated code, modularize the components, improve responsive Tailwind styling, and provide proper error and loading states while keeping all tests green. Update `prompt.md` with this input and the AI output.
+
+## AI Output
+
+Split the client UI into focused authentication, inventory dashboard, filter, vehicle card, and vehicle editor components. Shared form styling now uses common Tailwind class constants. Improved small-screen spacing, dashboard grids, and modal scrolling. Separated authentication, inventory loading, search, save, and delete states; added visible API error feedback for sign-in, search, and vehicle saves. Added coverage for pending inventory loads, failed sign-in, search errors, and editor save errors.
+
+Verification: all 5 test suites pass (115/115), the full Jest run exits cleanly with open-handle detection, the Vite production build succeeds, and the client TypeScript check passes.

@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../src/App.js';
 
@@ -103,6 +103,19 @@ describe('authentication forms', () => {
     });
     await waitFor(() => expect(localStorage.getItem('northstar-token')).toBe('registered.jwt'));
   });
+
+  it('shows a backend error when sign in fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Email or password is incorrect.' }, 401));
+    render(<App />);
+
+    await user.type(screen.getByLabelText(/email/i), 'buyer@example.com');
+    await user.type(screen.getByLabelText(/password/i), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Email or password is incorrect.');
+    expect(localStorage.getItem('northstar-token')).toBeNull();
+  });
 });
 
 describe('protected vehicle inventory dashboard', () => {
@@ -129,6 +142,20 @@ describe('protected vehicle inventory dashboard', () => {
     );
   });
 
+  it('shows a loading state while the protected inventory request is pending', async () => {
+    localStorage.setItem('northstar-token', 'admin-token');
+    let resolveInventory!: (response: Response) => void;
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ user: admin }))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { resolveInventory = resolve; }));
+    render(<App />);
+
+    expect(screen.getByRole('status').textContent).toMatch(/checking|loading/i);
+    expect(await screen.findByText(/loading your inventory/i)).toBeTruthy();
+    await act(async () => { resolveInventory(jsonResponse(vehicles)); });
+    expect(await screen.findByText('Camry')).toBeTruthy();
+  });
+
   it('submits search filters to the backend vehicle search endpoint', async () => {
     const user = userEvent.setup();
     mockAdminDashboard();
@@ -145,6 +172,19 @@ describe('protected vehicle inventory dashboard', () => {
       );
       expect(fetchMock.mock.calls[2][0]).toContain('Toyota');
     });
+  });
+
+  it('shows backend search errors without hiding the dashboard', async () => {
+    const user = userEvent.setup();
+    mockAdminDashboard();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Search is temporarily unavailable.' }, 500));
+    render(<App />);
+
+    await user.type(await screen.findByLabelText(/search vehicles/i), 'Toyota');
+    await user.keyboard('{Enter}');
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Search is temporarily unavailable.');
+    expect(screen.getByText('Vehicle inventory')).toBeTruthy();
   });
 
   it('submits a new vehicle form to the backend create endpoint', async () => {
@@ -169,6 +209,25 @@ describe('protected vehicle inventory dashboard', () => {
         expect.objectContaining({ method: 'POST', body: expect.stringContaining('Honda') }),
       );
     });
+  });
+
+  it('shows vehicle save errors inside the open editor', async () => {
+    const user = userEvent.setup();
+    mockAdminDashboard();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Inventory write failed.' }, 500));
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /add vehicle/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^make$/i), 'Honda');
+    await user.type(within(dialog).getByLabelText(/^model$/i), 'Civic');
+    await user.type(within(dialog).getByLabelText(/^year$/i), '2025');
+    await user.type(within(dialog).getByLabelText(/^category$/i), 'Sedan');
+    await user.type(within(dialog).getByLabelText(/^price$/i), '26000');
+    await user.type(within(dialog).getByLabelText(/^quantity$/i), '3');
+    await user.click(within(dialog).getByRole('button', { name: /save vehicle/i }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('Inventory write failed.');
   });
 
   it('submits vehicle edits to the backend update endpoint', async () => {
