@@ -32,6 +32,12 @@ export interface VehicleSearchFilters {
   maxPrice?: string;
 }
 
+export interface PurchaseResult {
+  purchaseId: number;
+  vehicleId: number;
+  remaining: number;
+}
+
 interface AuthResult {
   token: string;
   user: AuthUser;
@@ -101,5 +107,9 @@ export const vehicleApi = {
 
   delete(id: number): Promise<void> {
     return request<void>(`/vehicles/${id}`, { method: 'DELETE' });
+  },
+
+  purchase(id: number): Promise<PurchaseResult> {
+    return request<PurchaseResult>(`/vehicles/${id}/purchase`, { method: 'POST' });
   },
 };

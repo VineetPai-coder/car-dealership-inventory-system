@@ -31,11 +31,11 @@ function jsonResponse(data: unknown, status = 200): Response {
 
 const fetchMock = jest.fn<typeof fetch>();
 
-function mockAdminDashboard(): void {
+function mockAdminDashboard(listings = vehicles): void {
   localStorage.setItem('northstar-token', 'admin-token');
   fetchMock
     .mockResolvedValueOnce(jsonResponse({ user: admin }))
-    .mockResolvedValueOnce(jsonResponse(vehicles));
+    .mockResolvedValueOnce(jsonResponse(listings));
 }
 
 beforeEach(() => {
@@ -265,5 +265,43 @@ describe('protected vehicle inventory dashboard', () => {
         expect.objectContaining({ method: 'DELETE' }),
       );
     });
+  });
+
+  it('purchases an in-stock vehicle and updates its remaining quantity', async () => {
+    const user = userEvent.setup();
+    mockAdminDashboard();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ purchaseId: 42, vehicleId: 1, remaining: 3 }, 201));
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /^purchase$/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/vehicles/1/purchase',
+        expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer admin-token' }) }),
+      );
+    });
+    expect(await screen.findByText('3 in stock')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('Purchase complete. 3 remaining.');
+  });
+
+  it('disables purchase for vehicles with no stock', async () => {
+    mockAdminDashboard([{ ...vehicles[0], quantity: 0 }]);
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: /out of stock/i })).toHaveProperty('disabled', true);
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/vehicles/1/purchase', expect.anything());
+  });
+
+  it('shows backend purchase errors without hiding the inventory', async () => {
+    const user = userEvent.setup();
+    mockAdminDashboard();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Purchase could not be completed.' }, 409));
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /^purchase$/i }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Purchase could not be completed.');
+    expect(screen.getByText('Vehicle inventory')).toBeTruthy();
   });
 });

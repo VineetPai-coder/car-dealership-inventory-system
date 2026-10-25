@@ -10,6 +10,7 @@ interface InventoryDashboardProps {
   searching: boolean;
   saving: boolean;
   deletingVehicleId: number | null;
+  purchasingVehicleId: number | null;
   error: string;
   notice: string;
   onSignOut: () => void;
@@ -18,6 +19,7 @@ interface InventoryDashboardProps {
   onAdd: () => void;
   onEdit: (vehicle: Vehicle) => void;
   onDelete: (vehicle: Vehicle) => void;
+  onPurchase: (vehicle: Vehicle) => void;
 }
 
 export function InventoryDashboard({
@@ -28,6 +30,7 @@ export function InventoryDashboard({
   searching,
   saving,
   deletingVehicleId,
+  purchasingVehicleId,
   error,
   notice,
   onSignOut,
@@ -36,6 +39,7 @@ export function InventoryDashboard({
   onAdd,
   onEdit,
   onDelete,
+  onPurchase,
 }: InventoryDashboardProps) {
   const canManage = user.role === 'admin';
   const unitsInStock = vehicles.reduce((total, vehicle) => total + vehicle.quantity, 0);
@@ -96,8 +100,10 @@ export function InventoryDashboard({
                   vehicle={vehicle}
                   canManage={canManage}
                   deleting={deletingVehicleId === vehicle.id}
+                  purchasing={purchasingVehicleId === vehicle.id}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  onPurchase={onPurchase}
                 />
               ))}
             </div>

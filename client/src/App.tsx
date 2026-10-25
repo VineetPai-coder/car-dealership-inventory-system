@@ -30,6 +30,7 @@ export default function App() {
   const [searching, setSearching] = useState(false);
   const [savingVehicle, setSavingVehicle] = useState(false);
   const [deletingVehicleId, setDeletingVehicleId] = useState<number | null>(null);
+  const [purchasingVehicleId, setPurchasingVehicleId] = useState<number | null>(null);
   const [authError, setAuthError] = useState('');
   const [dashboardError, setDashboardError] = useState('');
   const [editorError, setEditorError] = useState('');
@@ -146,6 +147,23 @@ export default function App() {
     }
   }
 
+  async function purchaseVehicle(vehicle: Vehicle): Promise<void> {
+    setPurchasingVehicleId(vehicle.id);
+    setDashboardError('');
+    setNotice('');
+    try {
+      const result = await vehicleApi.purchase(vehicle.id);
+      setVehicles((current) => current.map((item) =>
+        item.id === vehicle.id ? { ...item, quantity: result.remaining } : item,
+      ));
+      setNotice(`Purchase complete. ${result.remaining} remaining.`);
+    } catch (error) {
+      setDashboardError(errorMessage(error, 'Unable to complete this purchase. Please try again.'));
+    } finally {
+      setPurchasingVehicleId(null);
+    }
+  }
+
   function signOut() {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     setToken(null);
@@ -179,6 +197,7 @@ export default function App() {
         searching={searching}
         saving={savingVehicle}
         deletingVehicleId={deletingVehicleId}
+        purchasingVehicleId={purchasingVehicleId}
         error={dashboardError}
         notice={notice}
         onSignOut={signOut}
@@ -187,6 +206,7 @@ export default function App() {
         onAdd={() => { setEditorError(''); setEditorVehicle('new'); }}
         onEdit={(vehicle) => { setEditorError(''); setEditorVehicle(vehicle); }}
         onDelete={(vehicle) => void removeVehicle(vehicle)}
+        onPurchase={(vehicle) => void purchaseVehicle(vehicle)}
       />
       {editorVehicle !== null && canManage && (
         <VehicleEditor

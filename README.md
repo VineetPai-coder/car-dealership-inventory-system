@@ -4,6 +4,8 @@ A full-stack inventory application for a car dealership. Staff can register and 
 
 **Repository:** [VineetPai-coder/car-dealership-inventory-system](https://github.com/VineetPai-coder/car-dealership-inventory-system)
 
+**Live demo:** [car-dealership-inventory-9s9s.onrender.com](https://car-dealership-inventory-9s9s.onrender.com/)
+
 ## Features
 
 - User registration and login with bcrypt password hashing and JWT authentication.
@@ -68,7 +70,7 @@ A full-stack inventory application for a car dealership. Staff can register and 
    npm test
    ```
 
-   Jest writes an HTML report to [`TEST_REPORT.html`](./TEST_REPORT.html). The latest full run passed **119 of 119 tests across 6 suites**. See [Test Report](#test-report).
+   Jest writes an HTML report to [`TEST_REPORT.html`](./TEST_REPORT.html). The latest full run passed **122 of 122 tests across 6 suites**. See [Test Report](#test-report).
 
 5. Start the backend and frontend together:
 
@@ -100,6 +102,8 @@ npm start
 The build command runs `build:server` and `build:client`. The production server listens on `PORT` (default `4000`) and serves the built frontend from `client/dist`.
 
 ### Deploy a Free Demo on Render
+
+The deployed application is available at [https://car-dealership-inventory-9s9s.onrender.com/](https://car-dealership-inventory-9s9s.onrender.com/).
 
 The root [`render.yaml`](./render.yaml) defines a Render Node web service in the Singapore region. To deploy it:
 
@@ -196,7 +200,7 @@ The latest recorded full test run completed with:
 | Result | Count |
 | --- | ---: |
 | Test suites passed | 6 / 6 |
-| Tests passed | 119 / 119 |
+| Tests passed | 122 / 122 |
 | Snapshots | 0 |
 
 Open the generated [Jest HTML test report](./TEST_REPORT.html) for suite-level details. Regenerate it at any time with `npm test`.

@@ -4,11 +4,13 @@ interface VehicleCardProps {
   vehicle: Vehicle;
   canManage: boolean;
   deleting: boolean;
+  purchasing: boolean;
   onEdit: (vehicle: Vehicle) => void;
   onDelete: (vehicle: Vehicle) => void;
+  onPurchase: (vehicle: Vehicle) => void;
 }
 
-export function VehicleCard({ vehicle, canManage, deleting, onEdit, onDelete }: VehicleCardProps) {
+export function VehicleCard({ vehicle, canManage, deleting, purchasing, onEdit, onDelete, onPurchase }: VehicleCardProps) {
   const price = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(vehicle.price);
 
   return (
@@ -29,6 +31,14 @@ export function VehicleCard({ vehicle, canManage, deleting, onEdit, onDelete }: 
           <p className="text-xl font-bold text-slate-950">{price}</p>
           <span className="text-xs font-medium text-slate-500">{vehicle.color}</span>
         </div>
+        <button
+          type="button"
+          disabled={vehicle.quantity === 0 || purchasing || deleting}
+          onClick={() => onPurchase(vehicle)}
+          className="mt-4 w-full rounded-lg bg-blue-700 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+        >
+          {purchasing ? 'Purchasing…' : vehicle.quantity === 0 ? 'Out of stock' : 'Purchase'}
+        </button>
         {canManage && (
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button type="button" disabled={deleting} onClick={() => onEdit(vehicle)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 disabled:opacity-50">Edit</button>
