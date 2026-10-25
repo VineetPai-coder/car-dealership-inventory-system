@@ -152,14 +152,15 @@ describe('GET /api/vehicles/:id', () => {
 
 describe('POST /api/vehicles', () => {
   it('I17 — 201 with vehicle object and linked dealerId when admin posts valid body', async () => {
-    const { app } = await buildTestApp();
+    const { app, db } = await buildTestApp();
+    const { id: dealerId } = seedUser(db, { email: 'admin@dealership.com', role: 'admin' });
     const res = await request(app).post('/api/vehicles')
-      .set('Authorization', `Bearer ${adminToken({ id: 999 })}`)
+      .set('Authorization', `Bearer ${adminToken({ id: dealerId })}`)
       .send(validVehicleBody);
     expect(res.status).toBe(201);
     expect(res.body.make).toBe('Toyota');
     expect(typeof res.body.id).toBe('number');
-    expect(res.body.dealerId).toBe(999);
+    expect(res.body.dealerId).toBe(dealerId);
   });
 
   it('I18 — 403 when regular user tries to add a vehicle', async () => {

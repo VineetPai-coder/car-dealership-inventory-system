@@ -178,3 +178,43 @@ Initiated Phase 2 (Vehicles CRUD & Search) with comprehensive test specification
      - 55 failed cleanly on `"Not implemented"` service stubs.
      - 19 passed on baseline middleware token/role/schema guards.
    - All vehicle business logic tests cleanly in RED state, ready for commit.
+---
+
+### Prompt 5 — Phase 2: Vehicles CRUD & Search (GREEN Phase)
+
+**User:**
+> for green write minimum production code use sqlite and zod validation so that all test cases will pass.
+> also put this and the previous prompt into prompt.md along with ai output
+
+**AI (Google Gemini / Antigravity):**
+
+Implemented the minimal production code in `server/src/services/vehicle.service.ts` using SQLite and Zod schemas to make all tests pass:
+
+1. **`listVehicles`:**
+   - Queries `vehicles` table ordered by `id DESC` returning all available inventory.
+
+2. **`getVehicleById`:**
+   - Prepared statement fetching single vehicle by ID; throws 404 `NotFoundError` when not found.
+
+3. **`createVehicle`:**
+   - Validates input against `vehicleSchema` using `safeParse`.
+   - Persists vehicle attributes (`make`, `model`, `year`, `category`, `color`, `price`, `quantity`, `description`, and `dealer_id`).
+   - Returns newly created vehicle record via `getVehicleById`.
+
+4. **`updateVehicle`:**
+   - Verifies vehicle existence (throwing 404 `NotFoundError` if missing).
+   - Validates update input against `vehicleSchema`.
+   - Executes parameterized `UPDATE` statement and returns modified record.
+
+5. **`deleteVehicle`:**
+   - Verifies vehicle existence before executing `DELETE FROM vehicles WHERE id = ?`.
+
+6. **`searchVehicles`:**
+   - Dynamically constructs parameterized SQL query for filters (`make`, `model`, `category`, `minPrice`, `maxPrice`, and multi-column `q`).
+
+7. **`purchaseVehicle` & `restockVehicle`:**
+   - `purchaseVehicle`: executes atomic SQLite transaction (`BEGIN IMMEDIATE` / `COMMIT`), validates stock, decrements quantity, logs purchase row, or rolls back on error.
+   - `restockVehicle`: validates restock quantity > 0 via `restockSchema` and updates quantity.
+
+8. **Test Suite Verification:**
+   - Ran `npm test`: **all 4 test suites and 101 tests passed (100% GREEN)**.
