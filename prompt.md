@@ -35,3 +35,17 @@ Begin Phase 3 using strict TDD. Write frontend tests for login and registration 
 Added React and React DOM, Testing Library, user-event, and Jest's jsdom environment, and updated Jest to discover the client tests and transform TSX. Added eight frontend tests covering login, registration, unauthenticated access, admin inventory rendering, search submission, vehicle creation, vehicle updates, and vehicle deletion.
 
 RED verification: the combined test run reports 5 suites total, 8 frontend tests failing and 103 existing backend tests passing (111 total). The failures are expected because `client/src/App.tsx` is still the placeholder and has no auth forms or inventory dashboard. The frontend is ready for the GREEN implementation step.
+
+---
+
+# Phase 3 GREEN — Prompt and AI Output
+
+## Prompt
+
+Implement the GREEN step for Phase 3: build a minimal Tailwind frontend with login and registration forms that submit to the backend and store the JWT, plus a protected vehicle dashboard that loads, displays, creates, updates, and deletes vehicles through the backend API. Update `prompt.md` with this prompt and the AI output.
+
+## AI Output
+
+Replaced the client placeholder with accessible sign-in and registration forms, a responsive vehicle inventory dashboard, search filters, inventory cards, and admin-only create/edit/delete actions. Added an API service that sends stored JWTs as bearer tokens, persists tokens returned from login and registration, validates session state through `/api/auth/me`, and calls the existing vehicle endpoints. Added minimal responsive Tailwind styling.
+
+Verification: all 5 test suites pass (111/111). The Vite client production build and strict client TypeScript check pass. The client tests also pass with Jest open-handle detection enabled.

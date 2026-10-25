@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../src/App.js';
 
@@ -52,6 +52,10 @@ afterEach(() => {
 describe('authentication forms', () => {
   it('submits login credentials to the backend login endpoint', async () => {
     const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ token: 'signed.jwt', user: admin }))
+      .mockResolvedValueOnce(jsonResponse({ user: admin }))
+      .mockResolvedValueOnce(jsonResponse([]));
     render(<App />);
 
     await user.type(screen.getByLabelText(/email/i), 'buyer@example.com');
@@ -67,10 +71,15 @@ describe('authentication forms', () => {
         }),
       );
     });
+    await waitFor(() => expect(localStorage.getItem('northstar-token')).toBe('signed.jwt'));
   });
 
   it('submits registration details to the backend register endpoint', async () => {
     const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ token: 'registered.jwt', user: admin }, 201))
+      .mockResolvedValueOnce(jsonResponse({ user: admin }))
+      .mockResolvedValueOnce(jsonResponse([]));
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /create account/i }));
@@ -92,6 +101,7 @@ describe('authentication forms', () => {
         }),
       );
     });
+    await waitFor(() => expect(localStorage.getItem('northstar-token')).toBe('registered.jwt'));
   });
 });
 
@@ -140,16 +150,17 @@ describe('protected vehicle inventory dashboard', () => {
   it('submits a new vehicle form to the backend create endpoint', async () => {
     const user = userEvent.setup();
     mockAdminDashboard();
-    fetchMock.mockResolvedValueOnce(jsonResponse(vehicles[0], 201));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ...vehicles[0], id: 2, make: 'Honda', model: 'Civic' }, 201));
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /add vehicle/i }));
-    await user.type(screen.getByLabelText(/make/i), 'Honda');
-    await user.type(screen.getByLabelText(/model/i), 'Civic');
-    await user.type(screen.getByLabelText(/year/i), '2025');
-    await user.type(screen.getByLabelText(/category/i), 'Sedan');
-    await user.type(screen.getByLabelText(/price/i), '26000');
-    await user.type(screen.getByLabelText(/quantity/i), '3');
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^make$/i), 'Honda');
+    await user.type(within(dialog).getByLabelText(/^model$/i), 'Civic');
+    await user.type(within(dialog).getByLabelText(/^year$/i), '2025');
+    await user.type(within(dialog).getByLabelText(/^category$/i), 'Sedan');
+    await user.type(within(dialog).getByLabelText(/^price$/i), '26000');
+    await user.type(within(dialog).getByLabelText(/^quantity$/i), '3');
     await user.click(screen.getByRole('button', { name: /save vehicle/i }));
 
     await waitFor(() => {
@@ -167,8 +178,9 @@ describe('protected vehicle inventory dashboard', () => {
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /edit/i }));
-    await user.clear(screen.getByLabelText(/price/i));
-    await user.type(screen.getByLabelText(/price/i), '27000');
+    const dialog = screen.getByRole('dialog');
+    await user.clear(within(dialog).getByLabelText(/^price$/i));
+    await user.type(within(dialog).getByLabelText(/^price$/i), '27000');
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {

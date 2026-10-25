@@ -30,7 +30,7 @@ const config = {
     ],
   },
 
-  extensionsToTreatAsEsm: ['.ts'],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
 
   // Coverage config
   collectCoverageFrom: [
