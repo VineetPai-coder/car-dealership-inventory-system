@@ -66,6 +66,8 @@ export const searchSchema = z.object({
   category: z.string().optional(),
   minPrice: z.coerce.number().nonnegative().optional(),
   maxPrice: z.coerce.number().nonnegative().optional(),
+  limit:    z.coerce.number().int().min(1).max(100).optional(),
+  offset:   z.coerce.number().int().nonnegative().optional(),
 });
 
 // ─── Auth schemas ─────────────────────────────────────────────────────────────

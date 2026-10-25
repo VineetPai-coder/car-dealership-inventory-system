@@ -6,6 +6,7 @@
  */
 
 import { DatabaseSync } from 'node:sqlite';
+import type { StatementSync } from 'node:sqlite';
 import type {
   Vehicle,
   CreateVehicleInput,
@@ -18,9 +19,15 @@ import {
   ValidationError,
   OutOfStockError,
 } from '../types/index.js';
-import { vehicleSchema, restockSchema } from '../validators/vehicle.schema.js';
+import { vehicleSchema, restockSchema, type VehicleInput } from '../validators/vehicle.schema.js';
 
-// ─── SELECT fragment reused in all vehicle queries ────────────────────────────
+type NormalizedVehiclePayload = Pick<
+  VehicleInput,
+  'make' | 'model' | 'year' | 'category' | 'color' | 'price' | 'quantity' | 'description'
+> & { dealerId: number | null };
+
+// ─── Query Fragments & Constants ─────────────────────────────────────────────
+
 export const VEHICLE_SELECT = `
   SELECT
     id, make, model, year, category, color, price, quantity, description,
@@ -29,52 +36,119 @@ export const VEHICLE_SELECT = `
   FROM vehicles
 `;
 
-// ─── CRUD ─────────────────────────────────────────────────────────────────────
+// WeakMap cache for prepared statements keyed by database instance
+const statementCache = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
 
-/** Returns all vehicles ordered by newest first. */
-export function listVehicles(db: DatabaseSync): Vehicle[] {
-  return db.prepare(`${VEHICLE_SELECT} ORDER BY id DESC`).all() as unknown as Vehicle[];
+/**
+ * Returns a cached prepared statement for a given database instance,
+ * avoiding duplicate statement compilation overhead on repetitive calls.
+ * The SQL is composed only from fixed query fragments; all caller values are
+ * supplied as bindings.
+ *
+ * @param db Database connection that owns the statement.
+ * @param sql Fixed SQL query text to prepare or retrieve.
+ * @returns A prepared statement associated with the given database.
+ */
+function getCachedStatement(db: DatabaseSync, sql: string): StatementSync {
+  let cache = statementCache.get(db);
+  if (!cache) {
+    cache = new Map();
+    statementCache.set(db, cache);
+  }
+
+  let stmt = cache.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    cache.set(sql, stmt);
+  }
+  return stmt;
 }
 
-/** Returns a single vehicle by ID. Throws NotFoundError if ID does not exist. */
+/**
+ * Normalizes validated vehicle fields before persistence.
+ *
+ * @param data Vehicle payload after Zod validation and default application.
+ * @returns A trimmed payload with explicit defaults for optional fields.
+ */
+function sanitizeVehiclePayload(data: VehicleInput): NormalizedVehiclePayload {
+  return {
+    make: data.make.trim(),
+    model: data.model.trim(),
+    year: data.year,
+    category: data.category.trim(),
+    color: data.color?.trim() || 'White',
+    price: data.price,
+    quantity: data.quantity,
+    description: data.description?.trim() || '',
+    dealerId: data.dealerId ?? null,
+  };
+}
+
+// ─── CRUD ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns all vehicles ordered by newest first.
+ */
+export function listVehicles(db: DatabaseSync): Vehicle[] {
+  const sql = `${VEHICLE_SELECT} ORDER BY id DESC`;
+  return getCachedStatement(db, sql).all() as unknown as Vehicle[];
+}
+
+/**
+ * Returns a single vehicle by ID.
+ *
+ * @throws {NotFoundError} If vehicle with specified ID does not exist.
+ */
 export function getVehicleById(db: DatabaseSync, id: number): Vehicle {
-  const row = db.prepare(`${VEHICLE_SELECT} WHERE id = ?`).get(id) as unknown as Vehicle | undefined;
+  const sql = `${VEHICLE_SELECT} WHERE id = ?`;
+  const row = getCachedStatement(db, sql).get(id) as unknown as Vehicle | undefined;
   if (!row) {
     throw new NotFoundError('Vehicle not found.');
   }
   return row;
 }
 
-/** Creates a new vehicle and returns the persisted record. */
+/**
+ * Creates a new vehicle record and returns the persisted entity.
+ *
+ * @throws {ValidationError} If input payload fails schema requirements.
+ */
 export function createVehicle(db: DatabaseSync, input: CreateVehicleInput): Vehicle {
   const parsed = vehicleSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError(parsed.error.issues[0].message);
   }
 
-  const { make, model, year, category, color, price, quantity, description, dealerId } = parsed.data;
+  const sanitized = sanitizeVehiclePayload(parsed.data);
 
-  const result = db.prepare(`
+  const insertSql = `
     INSERT INTO vehicles (make, model, year, category, color, price, quantity, description, dealer_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    make.trim(),
-    model.trim(),
-    year,
-    category.trim(),
-    color || 'White',
-    price,
-    quantity,
-    description || '',
-    dealerId ?? null,
+  `;
+
+  const result = getCachedStatement(db, insertSql).run(
+    sanitized.make,
+    sanitized.model,
+    sanitized.year,
+    sanitized.category,
+    sanitized.color,
+    sanitized.price,
+    sanitized.quantity,
+    sanitized.description,
+    sanitized.dealerId,
   );
 
   return getVehicleById(db, Number(result.lastInsertRowid));
 }
 
-/** Updates an existing vehicle. Throws NotFoundError if ID does not exist. */
+/**
+ * Updates an existing vehicle.
+ *
+ * @throws {NotFoundError} If target vehicle does not exist.
+ * @throws {ValidationError} If update input is invalid.
+ */
 export function updateVehicle(db: DatabaseSync, id: number, input: UpdateVehicleInput): Vehicle {
-  // Ensure vehicle exists before validating/updating
+  // Ensure vehicle exists before updating
   getVehicleById(db, id);
 
   const parsed = vehicleSchema.safeParse(input);
@@ -82,90 +156,114 @@ export function updateVehicle(db: DatabaseSync, id: number, input: UpdateVehicle
     throw new ValidationError(parsed.error.issues[0].message);
   }
 
-  const { make, model, year, category, color, price, quantity, description, dealerId } = parsed.data;
+  const sanitized = sanitizeVehiclePayload(parsed.data);
 
-  db.prepare(`
+  const updateSql = `
     UPDATE vehicles
     SET make = ?, model = ?, year = ?, category = ?, color = ?, price = ?, quantity = ?, description = ?, dealer_id = ?
     WHERE id = ?
-  `).run(
-    make.trim(),
-    model.trim(),
-    year,
-    category.trim(),
-    color || 'White',
-    price,
-    quantity,
-    description || '',
-    dealerId ?? null,
+  `;
+
+  getCachedStatement(db, updateSql).run(
+    sanitized.make,
+    sanitized.model,
+    sanitized.year,
+    sanitized.category,
+    sanitized.color,
+    sanitized.price,
+    sanitized.quantity,
+    sanitized.description,
+    sanitized.dealerId,
     id,
   );
 
   return getVehicleById(db, id);
 }
 
-/** Deletes a vehicle. Throws NotFoundError if ID does not exist. */
+/**
+ * Deletes a vehicle by ID.
+ *
+ * @throws {NotFoundError} If target vehicle does not exist.
+ */
 export function deleteVehicle(db: DatabaseSync, id: number): void {
   // Ensure vehicle exists before deleting
   getVehicleById(db, id);
 
-  db.prepare('DELETE FROM vehicles WHERE id = ?').run(id);
+  const deleteSql = 'DELETE FROM vehicles WHERE id = ?';
+  getCachedStatement(db, deleteSql).run(id);
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 /**
- * Searches vehicles by make, model, category, and/or price range.
- * All params are optional — omitting all returns all vehicles.
+ * Searches vehicles with optional filters and bounded pagination.
+ * Values are always passed as SQLite bindings; pagination preserves the
+ * existing unpaginated behavior when neither pagination option is provided.
+ * Results are ordered by descending vehicle ID for stable page boundaries.
+ *
+ * @param db Database connection to query.
+ * @param params Optional filter and pagination values.
+ * @returns Matching vehicles in newest-first order.
  */
 export function searchVehicles(db: DatabaseSync, params: VehicleSearchParams): Vehicle[] {
   const conditions: string[] = [];
-  const bindings: any[] = [];
+  const bindings: Array<string | number> = [];
 
-  if (params.q && params.q.trim()) {
-    const qTerm = `%${params.q.trim()}%`;
+  const trimmedQ = params.q?.trim();
+  if (trimmedQ) {
+    const qTerm = `%${trimmedQ}%`;
     conditions.push('(make LIKE ? OR model LIKE ? OR category LIKE ?)');
     bindings.push(qTerm, qTerm, qTerm);
   }
 
-  if (params.make && params.make.trim()) {
+  const trimmedMake = params.make?.trim();
+  if (trimmedMake) {
     conditions.push('make LIKE ?');
-    bindings.push(`%${params.make.trim()}%`);
+    bindings.push(`%${trimmedMake}%`);
   }
 
-  if (params.model && params.model.trim()) {
+  const trimmedModel = params.model?.trim();
+  if (trimmedModel) {
     conditions.push('model LIKE ?');
-    bindings.push(`%${params.model.trim()}%`);
+    bindings.push(`%${trimmedModel}%`);
   }
 
-  if (params.category && params.category.trim()) {
+  const trimmedCategory = params.category?.trim();
+  if (trimmedCategory) {
     conditions.push('category = ?');
-    bindings.push(params.category.trim());
+    bindings.push(trimmedCategory);
   }
 
-  if (typeof params.minPrice === 'number' && !isNaN(params.minPrice)) {
+  if (typeof params.minPrice === 'number' && Number.isFinite(params.minPrice)) {
     conditions.push('price >= ?');
     bindings.push(params.minPrice);
   }
 
-  if (typeof params.maxPrice === 'number' && !isNaN(params.maxPrice)) {
+  if (typeof params.maxPrice === 'number' && Number.isFinite(params.maxPrice)) {
     conditions.push('price <= ?');
     bindings.push(params.maxPrice);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const sql = `${VEHICLE_SELECT} ${whereClause} ORDER BY id DESC`;
+  const hasPagination = params.limit !== undefined || params.offset !== undefined;
+  const paginationClause = hasPagination ? ' LIMIT ? OFFSET ?' : '';
+  const sql = `${VEHICLE_SELECT} ${whereClause} ORDER BY id DESC${paginationClause}`;
 
-  return db.prepare(sql).all(...bindings) as unknown as Vehicle[];
+  if (hasPagination) {
+    bindings.push(params.limit ?? -1, params.offset ?? 0);
+  }
+
+  return getCachedStatement(db, sql).all(...bindings) as unknown as Vehicle[];
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 
 /**
  * Purchases a vehicle (decrements quantity by 1).
- * Uses an atomic SQLite transaction to prevent race conditions.
- * Throws OutOfStockError if quantity is 0.
- * Throws NotFoundError if the vehicle does not exist.
+ * Executes inside an atomic SQLite transaction (BEGIN IMMEDIATE) with rollback safety.
+ *
+ * @throws {NotFoundError} If vehicle does not exist.
+ * @throws {OutOfStockError} If inventory is 0.
  */
 export function purchaseVehicle(
   db: DatabaseSync,
@@ -175,9 +273,10 @@ export function purchaseVehicle(
   try {
     db.exec('BEGIN IMMEDIATE');
 
-    const vehicle = db
-      .prepare('SELECT id, price, quantity FROM vehicles WHERE id = ?')
-      .get(vehicleId) as { id: number; price: number; quantity: number } | undefined;
+    const selectSql = 'SELECT id, price, quantity FROM vehicles WHERE id = ?';
+    const vehicle = getCachedStatement(db, selectSql).get(vehicleId) as
+      | { id: number; price: number; quantity: number }
+      | undefined;
 
     if (!vehicle) {
       throw new NotFoundError('Vehicle not found.');
@@ -187,10 +286,11 @@ export function purchaseVehicle(
       throw new OutOfStockError('This vehicle is currently out of stock.');
     }
 
-    db.prepare('UPDATE vehicles SET quantity = quantity - 1 WHERE id = ?').run(vehicle.id);
-    const tx = db
-      .prepare('INSERT INTO purchases (user_id, vehicle_id, amount) VALUES (?, ?, ?)')
-      .run(userId, vehicle.id, vehicle.price);
+    const updateSql = 'UPDATE vehicles SET quantity = quantity - 1 WHERE id = ?';
+    getCachedStatement(db, updateSql).run(vehicle.id);
+
+    const insertPurchaseSql = 'INSERT INTO purchases (user_id, vehicle_id, amount) VALUES (?, ?, ?)';
+    const tx = getCachedStatement(db, insertPurchaseSql).run(userId, vehicle.id, vehicle.price);
 
     db.exec('COMMIT');
 
@@ -200,15 +300,20 @@ export function purchaseVehicle(
       remaining: vehicle.quantity - 1,
     };
   } catch (err) {
-    db.exec('ROLLBACK');
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Catch rollback error in case transaction was not open
+    }
     throw err;
   }
 }
 
 /**
  * Restocks a vehicle (increments quantity by the given amount).
- * Throws NotFoundError if the vehicle does not exist.
- * Throws ValidationError if quantity < 1.
+ *
+ * @throws {ValidationError} If quantity < 1 or invalid.
+ * @throws {NotFoundError} If vehicle does not exist.
  */
 export function restockVehicle(db: DatabaseSync, vehicleId: number, quantity: number): Vehicle {
   const parsed = restockSchema.safeParse({ quantity });
@@ -219,10 +324,8 @@ export function restockVehicle(db: DatabaseSync, vehicleId: number, quantity: nu
   // Ensure vehicle exists before updating
   getVehicleById(db, vehicleId);
 
-  db.prepare('UPDATE vehicles SET quantity = quantity + ? WHERE id = ?').run(
-    parsed.data.quantity,
-    vehicleId,
-  );
+  const restockSql = 'UPDATE vehicles SET quantity = quantity + ? WHERE id = ?';
+  getCachedStatement(db, restockSql).run(parsed.data.quantity, vehicleId);
 
   return getVehicleById(db, vehicleId);
 }

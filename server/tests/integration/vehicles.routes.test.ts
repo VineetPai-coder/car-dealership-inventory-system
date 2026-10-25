@@ -364,6 +364,21 @@ describe('GET /api/vehicles/search', () => {
     expect(res.body).toHaveLength(0);
   });
 
+  it('I40a — applies limit and offset after filtering, in newest-first order', async () => {
+    seedVehicle(db, { make: 'Hyundai', category: 'SUV', price: 29000 });
+    const res = await request(app).get('/api/vehicles/search?category=SUV&limit=1&offset=1')
+      .set('Authorization', `Bearer ${userToken()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].make).toBe('Honda');
+  });
+
+  it('I40b — rejects an invalid pagination limit', async () => {
+    const res = await request(app).get('/api/vehicles/search?limit=0')
+      .set('Authorization', `Bearer ${userToken()}`);
+    expect(res.status).toBe(400);
+  });
+
   it('I40 — 401 when search is accessed unauthenticated', async () => {
     const res = await request(app).get('/api/vehicles/search?make=Toyota');
     expect(res.status).toBe(401);

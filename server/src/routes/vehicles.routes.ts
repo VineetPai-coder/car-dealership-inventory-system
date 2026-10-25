@@ -19,10 +19,28 @@ import {
 } from '../services/vehicle.service.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { vehicleSchema, restockSchema, searchSchema } from '../validators/vehicle.schema.js';
-import type { AuthRequest } from '../types/index.js';
+import { AppError, type AuthRequest } from '../types/index.js';
 import db from '../db/database.js';
 
 export const vehiclesRouter = Router();
+
+/**
+ * Sends a consistent error response for a vehicle endpoint.
+ * Known application errors retain their status and message; unexpected errors
+ * use a safe endpoint-specific message.
+ *
+ * @param res Express response used to send the error.
+ * @param error Error thrown while handling the request.
+ * @param fallbackMessage Safe message for unexpected failures.
+ */
+function sendVehicleError(res: Response, error: unknown, fallbackMessage: string): void {
+  if (error instanceof AppError) {
+    res.status(error.statusCode).json({ error: error.message });
+    return;
+  }
+
+  res.status(500).json({ error: fallbackMessage });
+}
 
 // All vehicle routes require authentication
 vehiclesRouter.use(requireAuth);
@@ -32,8 +50,7 @@ vehiclesRouter.get('/', (_req, res: Response) => {
   try {
     res.json(listVehicles(db));
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Failed to fetch vehicles.' });
+    sendVehicleError(res, err, 'Failed to fetch vehicles.');
   }
 });
 
@@ -47,8 +64,7 @@ vehiclesRouter.get('/search', (req, res: Response) => {
     }
     res.json(searchVehicles(db, parsed.data));
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Search failed.' });
+    sendVehicleError(res, err, 'Search failed.');
   }
 });
 
@@ -58,8 +74,7 @@ vehiclesRouter.get('/:id', (req, res: Response) => {
     const vehicle = getVehicleById(db, Number(req.params.id));
     res.json(vehicle);
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Vehicle not found.' });
+    sendVehicleError(res, err, 'Vehicle not found.');
   }
 });
 
@@ -77,8 +92,7 @@ vehiclesRouter.post('/', requireAdmin, (req: AuthRequest, res: Response) => {
     });
     res.status(201).json(vehicle);
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Failed to create vehicle.' });
+    sendVehicleError(res, err, 'Failed to create vehicle.');
   }
 });
 
@@ -93,8 +107,7 @@ vehiclesRouter.put('/:id', requireAdmin, (req, res: Response) => {
     const vehicle = updateVehicle(db, Number(req.params.id), parsed.data);
     res.json(vehicle);
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Failed to update vehicle.' });
+    sendVehicleError(res, err, 'Failed to update vehicle.');
   }
 });
 
@@ -104,8 +117,7 @@ vehiclesRouter.delete('/:id', requireAdmin, (req, res: Response) => {
     deleteVehicle(db, Number(req.params.id));
     res.status(204).end();
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Failed to delete vehicle.' });
+    sendVehicleError(res, err, 'Failed to delete vehicle.');
   }
 });
 
@@ -115,8 +127,7 @@ vehiclesRouter.post('/:id/purchase', (req: AuthRequest, res: Response) => {
     const result = purchaseVehicle(db, Number(req.params.id), req.user!.id);
     res.status(201).json(result);
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Purchase failed.' });
+    sendVehicleError(res, err, 'Purchase failed.');
   }
 });
 
@@ -131,7 +142,6 @@ vehiclesRouter.post('/:id/restock', requireAdmin, (req, res: Response) => {
     const vehicle = restockVehicle(db, Number(req.params.id), parsed.data.quantity);
     res.json(vehicle);
   } catch (err) {
-    const e = err as any;
-    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Restock failed.' });
+    sendVehicleError(res, err, 'Restock failed.');
   }
 });

@@ -62,6 +62,10 @@ export interface VehicleSearchParams {
   category?: string;
   minPrice?: number;
   maxPrice?: number;
+  /** Maximum number of search results to return (1–100). */
+  limit?: number;
+  /** Number of matching results to skip before returning results. */
+  offset?: number;
 }
 
 // ─── Purchase ─────────────────────────────────────────────────────────────────
