@@ -12,8 +12,10 @@
  */
 
 import { DatabaseSync } from 'node:sqlite';
+import bcrypt from 'bcryptjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +74,50 @@ export function createDatabase(
   return db;
 }
 
+const bootstrapAdminSchema = z.object({
+  email: z.string().trim().email('Bootstrap admin email must be a valid email address.'),
+  password: z.string().min(8, 'Bootstrap admin password must be at least 8 characters.'),
+});
+
+/**
+ * Creates the environment-configured admin on a fresh database, or promotes
+ * the matching existing account. The configured password is only used when
+ * the account needs to be created and is never stored as plain text.
+ *
+ * @throws {Error} When only one credential is configured or credentials are invalid.
+ */
+export function ensureBootstrapAdmin(
+  db: DatabaseSync,
+  email: string | undefined,
+  password: string | undefined,
+): void {
+  if (email === undefined && password === undefined) return;
+  if (!email || !password) {
+    throw new Error('Both bootstrap admin email and password must be configured.');
+  }
+
+  const parsed = bootstrapAdminSchema.safeParse({ email, password });
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? 'Bootstrap admin credentials are invalid.';
+    throw new Error(`Invalid bootstrap admin configuration: ${message}`);
+  }
+
+  const normalizedEmail = parsed.data.email.toLowerCase();
+  const existingUser = db
+    .prepare('SELECT id FROM users WHERE email = ?')
+    .get(normalizedEmail) as { id: number } | undefined;
+
+  if (existingUser) {
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', existingUser.id);
+    return;
+  }
+
+  const passwordHash = bcrypt.hashSync(parsed.data.password, 10);
+  db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
+    .run('Dealership Admin', normalizedEmail, passwordHash, 'admin');
+}
+
 // Default singleton — used by the running server (not by tests)
 const db = createDatabase();
+ensureBootstrapAdmin(db, process.env.BOOTSTRAP_ADMIN_EMAIL, process.env.BOOTSTRAP_ADMIN_PASSWORD);
 export default db;

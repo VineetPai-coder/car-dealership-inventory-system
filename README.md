@@ -68,7 +68,7 @@ A full-stack inventory application for a car dealership. Staff can register and 
    npm test
    ```
 
-   Jest writes an HTML report to [`TEST_REPORT.html`](./TEST_REPORT.html). The last recorded full run passed **115 of 115 tests across 5 suites**. See [Test Report](#test-report).
+   Jest writes an HTML report to [`TEST_REPORT.html`](./TEST_REPORT.html). The latest full run passed **119 of 119 tests across 6 suites**. See [Test Report](#test-report).
 
 5. Start the backend and frontend together:
 
@@ -98,6 +98,17 @@ npm start
 ```
 
 The build command runs `build:server` and `build:client`. The production server listens on `PORT` (default `4000`) and serves the built frontend from `client/dist`.
+
+### Deploy a Free Demo on Render
+
+The root [`render.yaml`](./render.yaml) defines a Render Node web service in the Singapore region. To deploy it:
+
+1. In the Render Dashboard, create a new **Blueprint** and connect this GitHub repository.
+2. When prompted for `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`, enter the admin login you want to use. Use a password with at least 8 characters. Render generates `JWT_SECRET` for the service.
+3. Review the free service settings and apply the Blueprint. Render builds with `npm ci --include=dev && npm run build`, starts with `npm start`, and checks `/api/health`.
+4. Open the `onrender.com` URL shown on the service page and sign in with the bootstrap admin credentials.
+
+**Free-tier data limitation:** Render free web services use an ephemeral filesystem and spin down after 15 minutes without traffic. A local SQLite database can be erased when the service restarts, spins down, or redeploys, so accounts and vehicle data may need to be recreated. The bootstrap admin is recreated from the configured environment variables when the database is empty. For durable SQLite data, Render requires a paid web service with a persistent disk.
 
 ## API Endpoints
 
@@ -184,8 +195,8 @@ The latest recorded full test run completed with:
 
 | Result | Count |
 | --- | ---: |
-| Test suites passed | 5 / 5 |
-| Tests passed | 115 / 115 |
+| Test suites passed | 6 / 6 |
+| Tests passed | 119 / 119 |
 | Snapshots | 0 |
 
 Open the generated [Jest HTML test report](./TEST_REPORT.html) for suite-level details. Regenerate it at any time with `npm test`.
