@@ -60,6 +60,7 @@ export function seedVehicle(
     price: number;
     quantity: number;
     description: string;
+    dealerId: number | null;
   }> = {},
 ): { id: number } {
   const make = overrides.make ?? 'Toyota';
@@ -70,13 +71,14 @@ export function seedVehicle(
   const price = overrides.price ?? 25000;
   const quantity = overrides.quantity ?? 5;
   const description = overrides.description ?? 'A reliable sedan.';
+  const dealerId = overrides.dealerId ?? null;
 
   const result = db
     .prepare(
-      `INSERT INTO vehicles (make, model, year, category, color, price, quantity, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO vehicles (make, model, year, category, color, price, quantity, description, dealer_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(make, model, year, category, color, price, quantity, description);
+    .run(make, model, year, category, color, price, quantity, description, dealerId);
 
   return { id: Number(result.lastInsertRowid) };
 }

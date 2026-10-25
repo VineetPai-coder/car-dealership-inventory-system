@@ -56,6 +56,7 @@ export function createDatabase(
       price       REAL    NOT NULL CHECK(price >= 0),
       quantity    INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0),
       description TEXT    NOT NULL DEFAULT '',
+      dealer_id   INTEGER REFERENCES users(id),
       created_at  TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 

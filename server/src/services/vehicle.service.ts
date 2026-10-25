@@ -20,6 +20,7 @@ import type {
 export const VEHICLE_SELECT = `
   SELECT
     id, make, model, year, category, color, price, quantity, description,
+    dealer_id as dealerId,
     created_at as createdAt
   FROM vehicles
 `;
@@ -28,6 +29,12 @@ export const VEHICLE_SELECT = `
 
 /** Returns all vehicles ordered by newest first. */
 export function listVehicles(db: DatabaseSync): Vehicle[] {
+  // TODO (Phase 2 - GREEN): implement
+  throw new Error('Not implemented');
+}
+
+/** Returns a single vehicle by ID. Throws NotFoundError if ID does not exist. */
+export function getVehicleById(db: DatabaseSync, id: number): Vehicle {
   // TODO (Phase 2 - GREEN): implement
   throw new Error('Not implemented');
 }

@@ -45,6 +45,7 @@ export const vehicleSchema = z.object({
     .nonnegative('Quantity cannot be negative.'),
 
   description: z.string().max(1000, 'Description must be 1000 characters or fewer.').default(''),
+  dealerId: z.number().int().positive().nullable().optional(),
 });
 
 // ─── Restock body ─────────────────────────────────────────────────────────────

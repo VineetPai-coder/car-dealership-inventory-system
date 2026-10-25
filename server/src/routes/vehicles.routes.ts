@@ -9,6 +9,7 @@ import { Router } from 'express';
 import type { Response } from 'express';
 import {
   listVehicles,
+  getVehicleById,
   createVehicle,
   updateVehicle,
   deleteVehicle,
@@ -51,15 +52,29 @@ vehiclesRouter.get('/search', (req, res: Response) => {
   }
 });
 
-/** POST /api/vehicles — add a new vehicle (admin only) */
-vehiclesRouter.post('/', requireAdmin, (req, res: Response) => {
+/** GET /api/vehicles/:id — get a single vehicle by ID */
+vehiclesRouter.get('/:id', (req, res: Response) => {
+  try {
+    const vehicle = getVehicleById(db, Number(req.params.id));
+    res.json(vehicle);
+  } catch (err) {
+    const e = err as any;
+    res.status(e.statusCode ?? 500).json({ error: e.message ?? 'Vehicle not found.' });
+  }
+});
+
+/** POST /api/vehicles — add a new vehicle (admin only, links to dealer/user) */
+vehiclesRouter.post('/', requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const parsed = vehicleSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
-    const vehicle = createVehicle(db, parsed.data);
+    const vehicle = createVehicle(db, {
+      ...parsed.data,
+      dealerId: parsed.data.dealerId ?? req.user?.id,
+    });
     res.status(201).json(vehicle);
   } catch (err) {
     const e = err as any;

@@ -37,6 +37,7 @@ export interface Vehicle {
   price: number;
   quantity: number;
   description: string;
+  dealerId?: number | null;
   createdAt: string;
 }
 
@@ -49,6 +50,7 @@ export interface CreateVehicleInput {
   price: number;
   quantity: number;
   description?: string;
+  dealerId?: number | null;
 }
 
 export interface UpdateVehicleInput extends CreateVehicleInput {}

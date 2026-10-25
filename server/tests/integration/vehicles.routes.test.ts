@@ -1,8 +1,8 @@
 /**
  * tests/integration/vehicles.routes.test.ts
  *
- * Integration tests for /api/vehicles endpoints (CRUD + purchase + restock)
- * Phase 2 & 3 — RED: Tests will fail until services are implemented.
+ * Integration tests for /api/vehicles endpoints (CRUD + search + purchase + restock)
+ * Phase 2 & 3 — RED: Tests will fail until vehicle service is implemented.
  *
  * Run:  npm test -- vehicles.routes
  */
@@ -27,7 +27,7 @@ async function buildTestApp() {
   app.use(express.json());
 
   const {
-    listVehicles, createVehicle, updateVehicle,
+    listVehicles, getVehicleById, createVehicle, updateVehicle,
     deleteVehicle, searchVehicles, purchaseVehicle, restockVehicle,
   } = await import('../../src/services/vehicle.service.js');
 
@@ -47,11 +47,21 @@ async function buildTestApp() {
     } catch (e: any) { res.status(e.statusCode ?? 500).json({ error: e.message }); }
   });
 
-  router.post('/', requireAdmin, (req, res) => {
+  router.get('/:id', (req, res) => {
+    try {
+      const vehicle = getVehicleById(db, Number(req.params.id));
+      res.json(vehicle);
+    } catch (e: any) { res.status(e.statusCode ?? 500).json({ error: e.message }); }
+  });
+
+  router.post('/', requireAdmin, (req: AuthRequest, res) => {
     try {
       const p = vehicleSchema.safeParse(req.body);
       if (!p.success) { res.status(400).json({ error: p.error.issues[0].message }); return; }
-      res.status(201).json(createVehicle(db, p.data));
+      res.status(201).json(createVehicle(db, {
+        ...p.data,
+        dealerId: p.data.dealerId ?? req.user?.id,
+      }));
     } catch (e: any) { res.status(e.statusCode ?? 500).json({ error: e.message }); }
   });
 
@@ -111,20 +121,48 @@ describe('GET /api/vehicles', () => {
   });
 });
 
+// ─── GET /api/vehicles/:id ────────────────────────────────────────────────────
+
+describe('GET /api/vehicles/:id', () => {
+  it('I14 — 200 with vehicle details when vehicle exists', async () => {
+    const { app, db } = await buildTestApp();
+    const { id } = seedVehicle(db, { make: 'Audi', model: 'A4', price: 39000 });
+    const res = await request(app).get(`/api/vehicles/${id}`)
+      .set('Authorization', `Bearer ${userToken()}`);
+    expect(res.status).toBe(200);
+    expect(res.body.make).toBe('Audi');
+    expect(res.body.model).toBe('A4');
+  });
+
+  it('I15 — 404 for non-existent vehicle ID', async () => {
+    const { app } = await buildTestApp();
+    const res = await request(app).get('/api/vehicles/9999')
+      .set('Authorization', `Bearer ${userToken()}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('I16 — 401 when unauthenticated', async () => {
+    const { app } = await buildTestApp();
+    const res = await request(app).get('/api/vehicles/1');
+    expect(res.status).toBe(401);
+  });
+});
+
 // ─── POST /api/vehicles ───────────────────────────────────────────────────────
 
 describe('POST /api/vehicles', () => {
-  it('I14 — 201 with vehicle object when admin posts valid body', async () => {
+  it('I17 — 201 with vehicle object and linked dealerId when admin posts valid body', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).post('/api/vehicles')
-      .set('Authorization', `Bearer ${adminToken()}`)
+      .set('Authorization', `Bearer ${adminToken({ id: 999 })}`)
       .send(validVehicleBody);
     expect(res.status).toBe(201);
     expect(res.body.make).toBe('Toyota');
     expect(typeof res.body.id).toBe('number');
+    expect(res.body.dealerId).toBe(999);
   });
 
-  it('I15 — 403 when regular user tries to add a vehicle', async () => {
+  it('I18 — 403 when regular user tries to add a vehicle', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).post('/api/vehicles')
       .set('Authorization', `Bearer ${userToken()}`)
@@ -132,7 +170,14 @@ describe('POST /api/vehicles', () => {
     expect(res.status).toBe(403);
   });
 
-  it('I16 — 400 when make is missing', async () => {
+  it('I19 — 401 when unauthenticated user tries to add a vehicle', async () => {
+    const { app } = await buildTestApp();
+    const res = await request(app).post('/api/vehicles')
+      .send(validVehicleBody);
+    expect(res.status).toBe(401);
+  });
+
+  it('I20 — 400 when make is missing or empty', async () => {
     const { app } = await buildTestApp();
     const { make, ...noMake } = validVehicleBody;
     const res = await request(app).post('/api/vehicles')
@@ -141,11 +186,45 @@ describe('POST /api/vehicles', () => {
     expect(res.status).toBe(400);
   });
 
-  it('I17 — 400 when price is negative', async () => {
+  it('I21 — 400 when model is missing or empty', async () => {
+    const { app } = await buildTestApp();
+    const { model, ...noModel } = validVehicleBody;
+    const res = await request(app).post('/api/vehicles')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(noModel);
+    expect(res.status).toBe(400);
+  });
+
+  it('I22 — 400 when year is missing or invalid', async () => {
+    const { app } = await buildTestApp();
+    const res = await request(app).post('/api/vehicles')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ ...validVehicleBody, year: 1850 });
+    expect(res.status).toBe(400);
+  });
+
+  it('I23 — 400 when category is missing or empty', async () => {
+    const { app } = await buildTestApp();
+    const { category, ...noCategory } = validVehicleBody;
+    const res = await request(app).post('/api/vehicles')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(noCategory);
+    expect(res.status).toBe(400);
+  });
+
+  it('I24 — 400 when price is negative', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).post('/api/vehicles')
       .set('Authorization', `Bearer ${adminToken()}`)
       .send({ ...validVehicleBody, price: -100 });
+    expect(res.status).toBe(400);
+  });
+
+  it('I25 — 400 when quantity is negative', async () => {
+    const { app } = await buildTestApp();
+    const res = await request(app).post('/api/vehicles')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ ...validVehicleBody, quantity: -5 });
     expect(res.status).toBe(400);
   });
 });
@@ -153,7 +232,7 @@ describe('POST /api/vehicles', () => {
 // ─── PUT /api/vehicles/:id ────────────────────────────────────────────────────
 
 describe('PUT /api/vehicles/:id', () => {
-  it('I18 — 200 with updated vehicle for admin', async () => {
+  it('I26 — 200 with updated vehicle for admin', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).put(`/api/vehicles/${id}`)
@@ -164,7 +243,7 @@ describe('PUT /api/vehicles/:id', () => {
     expect(res.body.price).toBe(28000);
   });
 
-  it('I19 — 404 for non-existent vehicle ID', async () => {
+  it('I27 — 404 for non-existent vehicle ID', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).put('/api/vehicles/9999')
       .set('Authorization', `Bearer ${adminToken()}`)
@@ -172,7 +251,7 @@ describe('PUT /api/vehicles/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('I20 — 403 when non-admin tries to update', async () => {
+  it('I28 — 403 when non-admin tries to update', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).put(`/api/vehicles/${id}`)
@@ -180,12 +259,29 @@ describe('PUT /api/vehicles/:id', () => {
       .send(validVehicleBody);
     expect(res.status).toBe(403);
   });
+
+  it('I29 — 401 when unauthenticated', async () => {
+    const { app, db } = await buildTestApp();
+    const { id } = seedVehicle(db);
+    const res = await request(app).put(`/api/vehicles/${id}`)
+      .send(validVehicleBody);
+    expect(res.status).toBe(401);
+  });
+
+  it('I30 — 400 when update payload has invalid values', async () => {
+    const { app, db } = await buildTestApp();
+    const { id } = seedVehicle(db);
+    const res = await request(app).put(`/api/vehicles/${id}`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ ...validVehicleBody, price: -999 });
+    expect(res.status).toBe(400);
+  });
 });
 
 // ─── DELETE /api/vehicles/:id ─────────────────────────────────────────────────
 
 describe('DELETE /api/vehicles/:id', () => {
-  it('I21 — 204 when admin deletes existing vehicle', async () => {
+  it('I31 — 204 when admin deletes existing vehicle', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).delete(`/api/vehicles/${id}`)
@@ -193,7 +289,7 @@ describe('DELETE /api/vehicles/:id', () => {
     expect(res.status).toBe(204);
   });
 
-  it('I22 — 403 when regular user tries to delete', async () => {
+  it('I32 — 403 when regular user tries to delete', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).delete(`/api/vehicles/${id}`)
@@ -201,7 +297,14 @@ describe('DELETE /api/vehicles/:id', () => {
     expect(res.status).toBe(403);
   });
 
-  it('I23 — 404 for non-existent vehicle ID', async () => {
+  it('I33 — 401 when unauthenticated user tries to delete', async () => {
+    const { app, db } = await buildTestApp();
+    const { id } = seedVehicle(db);
+    const res = await request(app).delete(`/api/vehicles/${id}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('I34 — 404 for non-existent vehicle ID', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).delete('/api/vehicles/9999')
       .set('Authorization', `Bearer ${adminToken()}`);
@@ -222,7 +325,7 @@ describe('GET /api/vehicles/search', () => {
     seedVehicle(db, { make: 'Ford',   category: 'Truck', price: 45000 });
   });
 
-  it('I24 — filters by make', async () => {
+  it('I35 — filters by make', async () => {
     const res = await request(app).get('/api/vehicles/search?make=Toyota')
       .set('Authorization', `Bearer ${userToken()}`);
     expect(res.status).toBe(200);
@@ -230,7 +333,7 @@ describe('GET /api/vehicles/search', () => {
     expect(res.body[0].make).toBe('Toyota');
   });
 
-  it('I25 — filters by category', async () => {
+  it('I36 — filters by category', async () => {
     const res = await request(app).get('/api/vehicles/search?category=SUV')
       .set('Authorization', `Bearer ${userToken()}`);
     expect(res.status).toBe(200);
@@ -238,14 +341,14 @@ describe('GET /api/vehicles/search', () => {
     expect(res.body[0].category).toBe('SUV');
   });
 
-  it('I26 — filters by minPrice', async () => {
+  it('I37 — filters by minPrice', async () => {
     const res = await request(app).get('/api/vehicles/search?minPrice=30000')
       .set('Authorization', `Bearer ${userToken()}`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
   });
 
-  it('I27 — filters by maxPrice', async () => {
+  it('I38 — filters by maxPrice', async () => {
     const res = await request(app).get('/api/vehicles/search?maxPrice=30000')
       .set('Authorization', `Bearer ${userToken()}`);
     expect(res.status).toBe(200);
@@ -253,18 +356,23 @@ describe('GET /api/vehicles/search', () => {
     expect(res.body[0].make).toBe('Toyota');
   });
 
-  it('I28 — returns empty array when no vehicle matches', async () => {
+  it('I39 — returns empty array when no vehicle matches', async () => {
     const res = await request(app).get('/api/vehicles/search?make=Ferrari')
       .set('Authorization', `Bearer ${userToken()}`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(0);
+  });
+
+  it('I40 — 401 when search is accessed unauthenticated', async () => {
+    const res = await request(app).get('/api/vehicles/search?make=Toyota');
+    expect(res.status).toBe(401);
   });
 });
 
 // ─── POST /api/vehicles/:id/purchase ─────────────────────────────────────────
 
 describe('POST /api/vehicles/:id/purchase', () => {
-  it('I29 — 201 with remaining quantity when in stock', async () => {
+  it('I41 — 201 with remaining quantity when in stock', async () => {
     const { app, db } = await buildTestApp();
     seedUser(db, { email: 'user@test.com' });
     const { id } = seedVehicle(db, { quantity: 3 });
@@ -274,7 +382,7 @@ describe('POST /api/vehicles/:id/purchase', () => {
     expect(res.body.remaining).toBe(2);
   });
 
-  it('I30 — 409 when vehicle is out of stock', async () => {
+  it('I42 — 409 when vehicle is out of stock', async () => {
     const { app, db } = await buildTestApp();
     seedUser(db, { email: 'user@test.com' });
     const { id } = seedVehicle(db, { quantity: 0 });
@@ -283,14 +391,14 @@ describe('POST /api/vehicles/:id/purchase', () => {
     expect(res.status).toBe(409);
   });
 
-  it('I31 — 401 when no token provided', async () => {
+  it('I43 — 401 when no token provided', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).post(`/api/vehicles/${id}/purchase`);
     expect(res.status).toBe(401);
   });
 
-  it('I32 — 404 for non-existent vehicle', async () => {
+  it('I44 — 404 for non-existent vehicle', async () => {
     const { app, db } = await buildTestApp();
     seedUser(db, { email: 'user@test.com' });
     const res = await request(app).post('/api/vehicles/9999/purchase')
@@ -302,7 +410,7 @@ describe('POST /api/vehicles/:id/purchase', () => {
 // ─── POST /api/vehicles/:id/restock ──────────────────────────────────────────
 
 describe('POST /api/vehicles/:id/restock', () => {
-  it('I33 — 200 with updated vehicle when admin restocks', async () => {
+  it('I45 — 200 with updated vehicle when admin restocks', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db, { quantity: 5 });
     const res = await request(app).post(`/api/vehicles/${id}/restock`)
@@ -312,7 +420,7 @@ describe('POST /api/vehicles/:id/restock', () => {
     expect(res.body.quantity).toBe(15);
   });
 
-  it('I34 — 403 when regular user tries to restock', async () => {
+  it('I46 — 403 when regular user tries to restock', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).post(`/api/vehicles/${id}/restock`)
@@ -321,7 +429,7 @@ describe('POST /api/vehicles/:id/restock', () => {
     expect(res.status).toBe(403);
   });
 
-  it('I35 — 400 when quantity is 0', async () => {
+  it('I47 — 400 when quantity is 0', async () => {
     const { app, db } = await buildTestApp();
     const { id } = seedVehicle(db);
     const res = await request(app).post(`/api/vehicles/${id}/restock`)
@@ -330,7 +438,7 @@ describe('POST /api/vehicles/:id/restock', () => {
     expect(res.status).toBe(400);
   });
 
-  it('I36 — 404 for non-existent vehicle', async () => {
+  it('I48 — 404 for non-existent vehicle', async () => {
     const { app } = await buildTestApp();
     const res = await request(app).post('/api/vehicles/9999/restock')
       .set('Authorization', `Bearer ${adminToken()}`)
