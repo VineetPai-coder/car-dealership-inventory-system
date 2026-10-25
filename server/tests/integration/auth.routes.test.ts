@@ -20,7 +20,7 @@ import type { AuthRequest } from '../../src/types/index.js';
  * Builds a fresh Express app wired to an in-memory database for each test.
  * This avoids port conflicts and gives every test a clean state.
  */
-function buildTestApp() {
+async function buildTestApp() {
   const db = createTestDb();
   const app = express();
   app.use(express.json());

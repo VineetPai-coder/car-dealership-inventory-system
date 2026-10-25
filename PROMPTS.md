@@ -98,3 +98,28 @@ Created the complete project scaffold:
 - `client/src/App.tsx` — placeholder holding page
 
 **Total tests written: 80 tests (all expected to be RED before service implementations)**
+---
+
+### Prompt 3 — Completing Scaffolding & Verifying Initial RED Test State
+
+**User:**
+> complete whatever was unfinished in that prompt
+
+**AI (Google Gemini / Antigravity):**
+
+Completed the scaffolding fixes, native dependency resolution, and verified test execution:
+
+1. **Native Dependency & Environment Resolution:**
+   - Switched from `better-sqlite3` (which failed due to missing Visual Studio C++ compilers on Windows) to Node's built-in `node:sqlite` (`DatabaseSync`).
+   - Updated `package.json`, database connector `server/src/db/database.ts`, services (`auth.service.ts`, `vehicle.service.ts`), test helpers (`server/tests/helpers/db.ts`), and test suites.
+
+2. **Windows Path & Tooling Configurations:**
+   - Replaced `node_modules/.bin/jest` shell invocation in `package.json` with cross-platform node runner `node --experimental-vm-modules node_modules/jest/bin/jest.js`.
+   - Converted TypeScript Jest config `jest.config.ts` into native ESM `jest.config.js` to eliminate requirement for `ts-node`.
+   - Marked `buildTestApp()` in `server/tests/integration/auth.routes.test.ts` as `async`.
+
+3. **TDD RED State Verification:**
+   - Executed full test suite (`npm test`).
+   - Ran all 4 test suites and 80 test cases.
+   - Verified expected **RED** baseline: 68 tests failing with `"Not implemented"` stubs, and 12 passing for baseline unauthenticated/malformed token guards handled by existing middleware.
+   - Clean slate established for Phase 1 (Auth TDD cycle).

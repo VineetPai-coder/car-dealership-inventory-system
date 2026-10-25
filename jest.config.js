@@ -1,6 +1,5 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   // Use ts-jest to handle TypeScript files
   preset: 'ts-jest/presets/default-esm',
 
@@ -24,6 +23,7 @@ const config: Config = {
         tsconfig: {
           module: 'ESNext',
           moduleResolution: 'Bundler',
+          target: 'ES2022',
         },
       },
     ],

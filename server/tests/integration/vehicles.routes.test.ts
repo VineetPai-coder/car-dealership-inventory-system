@@ -15,7 +15,7 @@ import { adminToken, userToken } from '../helpers/auth.js';
 import { requireAuth, requireAdmin } from '../../src/middleware/auth.js';
 import { vehicleSchema, restockSchema, searchSchema } from '../../src/validators/vehicle.schema.js';
 import type { AuthRequest } from '../../src/types/index.js';
-import type Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 /**
  * Builds a fresh test app with an isolated in-memory DB.
@@ -213,7 +213,7 @@ describe('DELETE /api/vehicles/:id', () => {
 
 describe('GET /api/vehicles/search', () => {
   let app: express.Express;
-  let db: Database.Database;
+  let db: DatabaseSync;
 
   beforeEach(async () => {
     ({ app, db } = await buildTestApp());
